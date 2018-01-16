@@ -74,7 +74,8 @@ func newHybiServerConn(config *Config, buf *bufio.ReadWriter, rwc io.ReadWriteCl
 		PayloadType:        TextFrame,
 		defaultCloseStatus: closeStatusNormal,
 		frameReaderFactory: hybiFrameReaderFactory{buf.Reader},
-		// frameWriterFactory: hybiFrameWriterFactory{buf.Writer, req == nil}, // ?
+		// 客户端才需要Masking-key
+		frameWriterFactory: hybiFrameWriterFactory{buf.Writer, req == nil},
 	}
 	wsconn.frameHandler = &hybiFrameHandler{conn: wsconn}
 	return wsconn

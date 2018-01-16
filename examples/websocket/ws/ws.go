@@ -47,6 +47,8 @@ var (
 	ErrBadWebSocketVersion = &ProtocolError{"bad websocket verison"}
 	// ErrBadWebSocketProtocol 表示服务端必须从子协议中选一个协议
 	ErrBadWebSocketProtocol = &ProtocolError{"bad websocket Protocol"}
+	// ErrBadMaskingKey 表示生成的masking key有误
+	ErrBadMaskingKey = &ProtocolError{"bad masking-key"}
 )
 
 // ProtocolError 代表协议错误
@@ -124,6 +126,18 @@ again:
 		}
 	}
 	n, err = c.frameReader.Read(msg)
+	return n, err
+}
+
+func (c *Conn) Write(msg []byte) (n int, err error) {
+	c.wio.Lock()
+	defer c.wio.Unlock()
+	w, err := c.frameWriterFactory.NewFrameWriter(c.PayloadType)
+	if err != nil {
+		return 0, err
+	}
+	n, err = w.Write(msg)
+	w.Close()
 	return n, err
 }
 
