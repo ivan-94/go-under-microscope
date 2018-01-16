@@ -1,5 +1,7 @@
 package ws
 
+// 这个文件实现了服务端的主要接口
+
 import (
 	"bufio"
 	"fmt"
@@ -91,9 +93,10 @@ func newServerConn(conn net.Conn, buf *bufio.ReadWriter, req *http.Request, conf
 	return
 }
 
+// HandShaker 用于自定义握手行为
 type HandShaker func(*Config, *http.Request) error
 
-// Handler Websocket 连接处理器
+// Handler Websocket 连接处理器, 实现了http.Handler, 用法类似于http.HandlerFunc
 type Handler func(*Conn)
 
 func (h Handler) ServeHTTP(w http.ResponseWriter, req *http.Request) {

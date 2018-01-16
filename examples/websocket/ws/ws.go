@@ -1,7 +1,7 @@
-package ws
-
+// Package ws 实现websocket协议服务端
 // 协议原文: https://tools.ietf.org/html/rfc6455
 // 协议(中文解析)： http://blog.csdn.net/stoneson/article/details/8073285
+package ws
 
 import (
 	"bufio"
