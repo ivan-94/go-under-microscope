@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="X-UA-Compatible" content="ie=edge">
+  <title>Document</title>
+</head>
+<body>
+  hello world
+  <script>
+    const ws = new WebSocket("ws://localhost:4080/ws")
+    ws.addEventListener('open', evt => {
+      console.log('打开Websocket')
+      ws.send("hello world")
+    })
+    ws.addEventListener('message', evt => {
+      console.log('收到消息:', evt.data)
+    })
+    ws.addEventListener('close', evt => {
+      console.log('关闭', evt)
+    })
+  </script>
+</body>
+</html>
