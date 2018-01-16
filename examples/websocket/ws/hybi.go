@@ -5,7 +5,9 @@ package ws
 import (
 	"bufio"
 	"bytes"
+	"encoding/binary"
 	"io"
+	"io/ioutil"
 	"net/http"
 )
 
@@ -25,6 +27,9 @@ const (
 	closeStatusPolicyViolation   = 1008
 	closeStatusTooBigData        = 1009
 	closeStatusExtensionMismatch = 1010
+
+	// 控制帧(Control Frames) 包括Close, Ping, Pong. 控制帧的载荷最大长度不会超过125
+	maxControlFramePayloadLength = 125
 )
 
 var (
@@ -89,9 +94,76 @@ type hybiFrameHandler struct {
 
 func (h *hybiFrameHandler) HandleFrame(frame frameReader) (r frameReader, err error) {
 	// TODO check MaskingKey
+	if h.conn.IsServerConn() {
+		// 客户端请求必须带maskingkey
+		if frame.(*hybiFrameReader).header.MaskingKey == nil {
+			h.WriteClose(closeStatusProtocolError)
+			return nil, io.EOF
+		}
+	} else {
+		// 服务端必须没有mask所有帧
+		if frame.(*hybiFrameReader).header.MaskingKey != nil {
+			h.WriteClose(closeStatusProtocolError)
+			return nil, io.EOF
+		}
+	}
+
+	// 这一步有什么用? 清空header?
+	if header := frame.HeaderReader(); header != nil {
+		io.Copy(ioutil.Discard, header)
+	}
+
+	switch frame.PayloadType() {
+	// 分片
+	case ContinuationFrame:
+		frame.(*hybiFrameReader).header.OpCode = h.payloadType
+	case TextFrame, BinaryFrame:
+		h.payloadType = frame.PayloadType()
+	case CloseFrame:
+		return nil, io.EOF
+	case PingFrame, PongFrame:
+		b := make([]byte, maxControlFramePayloadLength)
+		n, err := io.ReadFull(frame, b)
+		if err != nil && err != io.EOF && err != io.ErrUnexpectedEOF {
+			return nil, err
+		}
+		// 忽略剩余的数据
+		io.Copy(ioutil.Discard, frame)
+		// 回复Pong
+		if frame.PayloadType() == PingFrame {
+			if _, err := h.WritePong(b[:n]); err != nil {
+				return nil, err
+			}
+		}
+		return nil, nil
+	}
 	return frame, nil
 }
 
 func (h *hybiFrameHandler) WriteClose(status int) (err error) {
-	return
+	h.conn.wio.Lock()
+	defer h.conn.wio.Unlock()
+	w, err := h.conn.frameWriterFactory.NewFrameWriter(CloseFrame)
+	if err != nil {
+		return err
+	}
+	msg := make([]byte, 2)
+	// 载荷的前两个字节必须是无符号的整数(以网络字节序)
+	// 后续可选内容是utf-8编码的数据, 一般用于调试
+	binary.BigEndian.PutUint16(msg, uint16(status))
+	_, err = w.Write(msg)
+	w.Close()
+	return err
+}
+
+func (h *hybiFrameHandler) WritePong(msg []byte) (n int, err error) {
+	h.conn.wio.Lock()
+	defer h.conn.wio.Unlock()
+	w, err := h.conn.frameWriterFactory.NewFrameWriter(PongFrame)
+	if err != nil {
+		return 0, err
+	}
+	n, err = w.Write(msg)
+	w.Close()
+	return n, err
 }
